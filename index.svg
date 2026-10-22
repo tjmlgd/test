@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml" style="height:100vh; width:100vw; margin:0; padding:0; background:#0d0f17; color:#fff; font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+      <h1 style="margin-bottom:1rem; color:#6366f1;">Achroma Launcher</h1>
+      <p style="color:#9ca3af; margin-bottom:1.5rem;">Running directly inside standalone SVG wrapper</p>
+      <div style="display:flex; gap:10px;">
+        <button style="padding:10px 20px; border-radius:8px; border:1px solid #333; background:#1e293b; color:#fff; cursor:pointer;" onclick="window.open('https://classroom.google.com', '_self')">Quick Exit</button>
+      </div>
+      <script>
+        <![CDATA[
+          window.addEventListener('keydown', (e) => {
+            if (e.key === ']') window.location.replace('https://classroom.google.com');
+          });
+        ]]>
+      </script>
+    </div>
+  </foreignObject>
+</svg>
