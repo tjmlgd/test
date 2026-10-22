@@ -1,8 +1,11 @@
 /* global UVServiceWorker */
 importScripts('https://cdn.jsdelivr.net/npm/@titaniumnetwork-dev/ultraviolet@3.2.11/dist/uv.bundle.js');
 
+// Automatically detect the repository subfolder path on jsDelivr or GitHub
+const basePath = location.pathname.substring(0, location.pathname.lastIndexOf('/') + 1);
+
 self.__uv$config = {
-  prefix: '/service/',
+  prefix: basePath + 'service/',
   bare: 'https://bare.benroberts.net/',
 };
 
