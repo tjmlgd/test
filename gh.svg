@@ -1,0 +1,240 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100">
+  <foreignObject width="100%" height="100%">
+    <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Classes</title>
+        <link id="favicon" rel="icon" href="https://ssl.gstatic.com/classroom/favicon.png" />
+        <style>
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          }
+          body {
+            background-color: #0d0f17;
+            color: #f3f4f6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+          }
+          header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(13, 15, 23, 0.8);
+          }
+          .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: #6366f1;
+          }
+          main {
+            max-width: 650px;
+            margin: 4rem auto 2rem;
+            text-align: center;
+            width: 90%;
+            flex: 1;
+          }
+          h1 {
+            font-size: 2.4rem;
+            margin-bottom: 0.5rem;
+          }
+          p.subtitle {
+            color: #9ca3af;
+            font-size: 0.95rem;
+          }
+          .search-box {
+            display: flex;
+            margin-top: 2rem;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+          }
+          button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            background: #6366f1;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+          }
+          button:hover {
+            background: #4f46e5;
+          }
+          #status {
+            margin-top: 1.25rem;
+            color: #9ca3af;
+            font-size: 14px;
+          }
+          #viewport-container {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: none;
+            flex-direction: column;
+            z-index: 99999;
+          }
+          .toolbar {
+            height: 42px;
+            background: #11141d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+          }
+          #app-frame {
+            flex: 1;
+            border: none;
+            width: 100%;
+            height: 100%;
+            background: #fff;
+          }
+        </style>
+      </head>
+      <body>
+        <header>
+          <div class="logo">Achroma</div>
+          <button onclick="panic()">Panic</button>
+        </header>
+
+        <main>
+          <h1>Web Proxy</h1>
+          <p class="subtitle">Search with DuckDuckGo or enter any URL to unblock</p>
+
+          <div class="search-box">
+            <input type="text" id="url-input" placeholder="Search or type URL..." autocomplete="off" />
+            <button id="launch-button" onclick="launch()">Search</button>
+          </div>
+
+          <p id="status">Initializing proxy...</p>
+        </main>
+
+        <div id="viewport-container">
+          <div class="toolbar">
+            <span style="font-size: 0.85rem; color: #9ca3af;">Achroma Viewport</span>
+            <button onclick="closeFrame()">Close</button>
+          </div>
+          <iframe id="app-frame" allowfullscreen="allowfullscreen"></iframe>
+        </div>
+
+        <!-- 1. Load local bundle -->
+        <script type="text/javascript" src="uv/uv.bundle.js"></script>
+
+        <!-- 2. UV Configuration & Registration -->
+        <script type="text/javascript">
+          // <![CDATA[
+          const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+
+          const encodeUrl = (url) => {
+            if (!url) return url;
+            return encodeURIComponent(
+              url.toString().split('').map((char, ind) => 
+                ind % 2 ? String.fromCharCode(char.charCodeAt() ^ 2) : char
+              ).join('')
+            );
+          };
+
+          self.__uv$config = {
+            prefix: basePath + 'service/',
+            bare: 'https://bare.benroberts.net/',
+            encodeUrl: (typeof Ultraviolet !== 'undefined' && Ultraviolet.codec && Ultraviolet.codec.xor) ? Ultraviolet.codec.xor.encode : encodeUrl,
+            handler: basePath + 'uv/uv.handler.js',
+            client: basePath + 'uv/uv.client.js',
+            bundle: basePath + 'uv/uv.bundle.js',
+            config: basePath + 'uv/uv.config.js',
+            sw: basePath + 'uv/uv.sw.js',
+          };
+
+          let swRegistered = false;
+          const status = document.getElementById("status");
+          const input = document.getElementById("url-input");
+          const container = document.getElementById("viewport-container");
+          const frame = document.getElementById("app-frame");
+
+          async function registerSW() {
+            if (!("serviceWorker" in navigator)) {
+              status.textContent = "Service workers are not supported in this browser context.";
+              return;
+            }
+
+            try {
+              await navigator.serviceWorker.register(basePath + "sw.js", {
+                scope: __uv$config.prefix
+              });
+              await navigator.serviceWorker.ready;
+              swRegistered = true;
+              status.textContent = "Proxy service is ready.";
+              console.log("Service Worker registered with scope: " + __uv$config.prefix);
+            } catch (err) {
+              swRegistered = false;
+              status.textContent = "Setup failed: " + err.message;
+              console.error("SW error:", err);
+            }
+          }
+
+          async function launch() {
+            const query = input.value.trim();
+            if (!query) return;
+
+            status.textContent = "Opening...";
+
+            if (!swRegistered) {
+              await registerSW();
+            }
+
+            let url;
+            if (/^https?:\/\//i.test(query)) {
+              url = query;
+            } else if (/^[^\s.]+\.[^\s]+$/.test(query) && !query.includes(" ")) {
+              url = "https://" + query;
+            } else {
+              url = "https://duckduckgo.com/?q=" + encodeURIComponent(query);
+            }
+
+            frame.src = __uv$config.prefix + __uv$config.encodeUrl(url);
+            container.style.display = "flex";
+            status.textContent = "Loaded: " + url;
+          }
+
+          function closeFrame() {
+            frame.src = "about:blank";
+            container.style.display = "none";
+          }
+
+          function panic() {
+            window.location.replace("https://classroom.google.com");
+          }
+
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") launch();
+          });
+
+          window.addEventListener("load", () => {
+            registerSW();
+          });
+          // ]]>
+        </script>
+      </body>
+    </html>
+  </foreignObject>
+</svg>
