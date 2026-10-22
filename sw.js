@@ -1,6 +1,12 @@
-importScripts('uv/uv.bundle.js');
-importScripts('uv/uv.config.js');
-importScripts(__uv$config.sw || 'uv/uv.sw.js');
+/* global UVServiceWorker */
+importScripts('https://cdn.jsdelivr.net/npm/@titaniumnetwork-dev/ultraviolet@3.2.11/dist/uv.bundle.js');
+
+self.__uv$config = {
+  prefix: '/service/',
+  bare: 'https://bare.benroberts.net/',
+};
+
+importScripts('https://cdn.jsdelivr.net/npm/@titaniumnetwork-dev/ultraviolet@3.2.11/dist/uv.sw.js');
 
 const uv = new UVServiceWorker();
 
