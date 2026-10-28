@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>p.html — single-file CORS proxy</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='24'%3E%F0%9F%94%81%3C/text%3E%3C/svg%3E">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--line:#30363d;--fg:#e6edf3;--dim:#8b949e;--acc:#58a6ff;--ok:#3fb950;--bad:#f85149;--warn:#d29922}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif}
+body{padding:18px;max-width:1080px;margin:0 auto}
+h1{font-size:16px;margin:0;letter-spacing:.3px}
+.sub{color:var(--dim);font-size:12px}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.spacer{flex:1}
+.pill{font:11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.pill.ok{color:var(--ok);border-color:#1f6f34}.pill.bad{color:var(--bad);border-color:#7d2b26}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+input,select,textarea,button{font:inherit;background:#0d1117;color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:8px 10px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+input#url{flex:1;min-width:240px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+button{cursor:pointer;background:#21262d}
+button:hover{border-color:var(--acc)}
+button.primary{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
+button.primary:hover{background:#2b7ff5}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--dim);font-size:12px}
+textarea{width:100%;min-height:74px;margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:12px;resize:vertical}
+.log{margin-top:12px;font:11.5px/1.7 ui-monospace,Menlo,monospace;color:var(--dim);max-height:150px;overflow:auto}
+.log div{display:flex;gap:10px}
+.log b{font-weight:600;min-width:104px}
+.log .ok{color:var(--ok)}.log .bad{color:var(--bad)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{padding:5px 11px;font-size:12px;border-radius:999px}
+.tabs button[aria-selected="true"]{background:#1f6feb;border-color:#1f6feb;color:#fff}
+pre{margin:0;padding:12px;background:#0d1117;border:1px solid var(--line);border-radius:8px;overflow:auto;max-height:60vh;font:12.5px/1.6 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-word}
+.k{color:#79c0ff}.s{color:#a5d6ff}.n{color:#ffa657}.b{color:#d2a8ff}.x{color:#8b949e}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:var(--dim)}
+.bar .st{font:600 12px/1 ui-monospace,Menlo,monospace;padding:4px 8px;border-radius:6px;background:#21262d}
+.bar .st.ok{color:var(--ok)}.bar .st.bad{color:var(--bad)}
+.kv{font:12px/1.9 ui-monospace,Menlo,monospace;color:var(--dim)}
+.kv span{color:var(--fg)}
+.linkrow{display:flex;gap:8px;align-items:center;margin-top:8px}
+.linkrow input{flex:1;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--acc)}
+.hint{color:var(--dim);font-size:12px;margin-top:6px}
+img.pv{max-width:100%;max-height:44vh;border-radius:8px;border:1px solid var(--line);margin-top:10px}
+video.pv{max-width:100%;border-radius:8px;margin-top:10px}
+#viewer{position:fixed;inset:0;background:#0d1117}
+#viewer img,#viewer video,#viewer iframe{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;border:0}
+body.embed{padding:0;max-width:none}
+body.embed header,body.embed #app,body.embed footer{display:none}
+footer{color:var(--dim);font-size:11.5px;text-align:center;margin-top:18px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔁 p.html</h1>
+  <span class="sub">single-file CORS proxy · static host friendly</span>
+  <span class="spacer"></span>
+  <span id="swpill" class="pill">service worker: …</span>
+  <span id="endpoint" class="pill">endpoint: …</span>
+</header>
+
+<div id="app">
+  <div class="card">
+    <div class="row">
+      <select id="method">
+        <option>GET</option><option>HEAD</option><option>POST</option>
+        <option>PUT</option><option>PATCH</option><option>DELETE</option>
+      </select>
+      <input id="url" placeholder="https://api.example.com/v1/things?limit=5" spellcheck="false">
+      <select id="mode">
+        <option value="auto">auto: direct → relays</option>
+        <option value="direct">direct only</option>
+        <option value="proxies">relays only</option>
+      </select>
+      <button id="send" class="primary">Send</button>
+    </div>
+    <details>
+      <summary>headers &amp; body</summary>
+      <textarea id="headers" placeholder="Content-Type: application/json&#10;Authorization: Bearer xxxxx" spellcheck="false"></textarea>
+      <textarea id="body" placeholder='{"hello":"world"}' spellcheck="false"></textarea>
+    </details>
+    <div id="log" class="log"></div>
+  </div>
+
+  <div class="card" id="respcard" hidden>
+    <div class="bar">
+      <span id="status" class="st">—</span>
+      <span id="meta"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button id="cpbody">copy body</button>
+      <button id="cpfetch">copy fetch()</button>
+      <button id="cpcurl">copy cURL</button>
+      <button id="open">open raw</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="pretty">pretty</button>
+      <button role="tab" aria-selected="false" data-tab="raw">raw</button>
+      <button role="tab" aria-selected="false" data-tab="headers">headers</button>
+    </div>
+    <div id="out"></div>
+  </div>
+
+  <div class="card">
+    <div class="sub">reusable links (auto-built from the last request)</div>
+    <div class="linkrow"><input id="lraw" readonly placeholder="run a request first"><button data-copy="lraw">copy</button><button data-open="lraw">open</button></div>
+    <div class="linkrow"><input id="lembed" readonly placeholder="…"><button data-copy="lembed">copy</button></div>
+    <div class="linkrow"><input id="ltext" readonly placeholder="…"><button data-copy="ltext">copy</button></div>
+    <div class="hint">Drop <code>lraw</code> straight into <code>&lt;img src&gt;</code>, <code>&lt;video src&gt;</code> or <code>&lt;iframe src&gt;</code>. Append <code>&amp;dl=1</code> to force a download.</div>
+  </div>
+</div>
+
+<div id="viewer" hidden></div>
+
+<footer>relay list lives at the top of the script — edit it freely. nothing is sent anywhere except the target you type.</footer>
+
+<script>
+(() => {
+'use strict';
+
+/* ─────────── relay list — edit these to taste ───────────
+   {enc} = encodeURIComponent(target)   {raw} = target as-is
+   post:true means the relay forwards method+body             */
+const PROXIES = [
+  { name: 'allorigins',  url: 'https://api.allorigins.win/raw?url={enc}' },
+  { name: 'corsproxy.io',url: 'https://corsproxy.io/?url={enc}', post: true },
+  { name: 'codetabs',    url: 'https://api.codetabs.com/v1/proxy?quest={enc}' },
+  { name: 'cors.lol',    url: 'https://api.cors.lol/?url={enc}' },
+  { name: 'cors.eu.org', url: 'https://cors.eu.org/{raw}' },
+  { name: 'thingproxy',  url: 'https://thingproxy.freeboard.io/fetch/{raw}' },
+  { name: 'workers.dev', url: 'https://test.cors.workers.dev/?{raw}' },
+  { name: 'yacdn',       url: 'https://yacdn.org/proxy/{raw}' },
+  { name: 'isomorphic',  url: 'https://cors.isomorphic-git.org/{raw}' },
+  { name: 'jina-text',   url: 'https://r.jina.ai/{raw}', text: true }
+];
+
+const MIME = {
+  js:'text/javascript',mjs:'text/javascript',css:'text/css',map:'application/json',json:'application/json',
+  html:'text/html; charset=utf-8',htm:'text/html; charset=utf-8',xml:'application/xml',svg:'image/svg+xml',
+  txt:'text/plain; charset=utf-8',md:'text/markdown; charset=utf-8',vtt:'text/vtt',pdf:'application/pdf',
+  png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',avif:'image/avif',ico:'image/x-icon',
+  mp4:'video/mp4',webm:'video/webm',mov:'video/quicktime',
+  mp3:'audio/mpeg',m4a:'audio/mp4',ogg:'audio/ogg',wav:'audio/wav',
+  woff2:'font/woff2',woff:'font/woff',ttf:'font/ttf',otf:'font/otf',wasm:'application/wasm'
+};
+
+/* ─────────── inline service worker: gives us a real byte endpoint ─────────── */
+const SW_SOURCE = `
+const PROXIES = ${JSON.stringify(PROXIES)};
+const MIME = ${JSON.stringify(MIME)};
+const build = (t, u) => t.replace('{enc}', encodeURIComponent(u)).replace('{raw}', u);
+const guess = (u) => {
+  const p = u.split('?')[0].split('#')[0];
+  return MIME[p.slice(p.lastIndexOf('.') + 1).toLowerCase()] || 'application/octet-stream';
+};
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET' && e.request.method !== 'HEAD') return;
+  const u = new URL(e.request.url);
+  const scope = new URL(self.registration.scope);
+  if (u.origin !== scope.origin) return;
+  if (!u.pathname.startsWith(scope.pathname.replace(/\\/+$/, '/') + 'raw/')) return;
+  e.respondWith(handle(u));
+});
+async function handle(u) {
+  const target = u.searchParams.get('u');
+  if (!target) return new Response('missing ?u=', { status: 400 });
+  let r = null;
+  try { const d = await fetch(target, { redirect: 'follow', credentials: 'omit' }); if (d.type !== 'opaque') r = d; } catch (err) {}
+  if (!r) for (const p of PROXIES) {
+    try { const x = await fetch(build(p.url, target), { redirect: 'follow' }); if (x.ok) { r = x; break; } } catch (err) {}
+  }
+  if (!r) return new Response('all routes failed', { status: 502 });
+  const buf = await r.arrayBuffer();
+  const h = new Headers({
+    'content-type': r.headers.get('content-type') || guess(target),
+    'access-control-allow-origin': '*',
+    'cache-control': 'public, max-age=300',
+    'x-proxied-by': 'p.html'
+  });
+  if (u.searchParams.has('dl')) h.set('content-disposition', 'attachment');
+  return new Response(buf, { status: 200, headers: h });
+}
+`;
+
+/* ─────────── tiny helpers ─────────── */
+const $ = (s) => document.querySelector(s);
+const qs = new URLSearchParams(location.search);
+const enc = encodeURIComponent;
+const build = (t, u) => t.replace('{enc}', enc(u)).replace('{raw}', u);
+const now = () => Date.now();
+const DOWN_KEY = 'p.html.down';
+const DOWN_TTL = 10 * 60 * 1000;
+let down = {};
+try { down = JSON.parse(localStorage.getItem(DOWN_KEY) || '{}'); } catch {}
+const persist = () => { try { localStorage.setItem(DOWN_KEY, JSON.stringify(down)); } catch {} };
+const alive = () => {
+  const fresh = PROXIES.filter((p) => now() - (down[p.name] || 0) > DOWN_TTL);
+  return fresh.length ? fresh : PROXIES;
+};
+const markDown = (n) => { down[n] = now(); persist(); };
+const markUp = (n) => { delete down[n]; persist(); };
+
+let RAW_BASE = null;                 // set once the service worker is live
+const bestEndpoint = (target) =>
+  RAW_BASE ? RAW_BASE + enc(target)
+           : build(alive()[0].url, target);
+
+const norm = (u) => (/^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, ''));
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+function highlight(s) {
+  return esc(s).replace(
+    /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    (m) => {
+      let c = 'n';
+      if (m[0] === '"') c = /:\s*$/.test(m) ? 'k' : 's';
+      else if (/^(true|false)$/.test(m)) c = 'b';
+      else if (m === 'null') c = 'x';
+      return '<span class="' + c + '">' + m + '</span>';
+    });
+}
+const parseHeaders = (t) => {
+  const h = {};
+  for (const line of t.split('\n')) {
+    const m = /^\s*([^:#]+?)\s*:\s*(.*)$/.exec(line);
+    if (m) h[m[1].trim()] = m[2].trim();
+  }
+  return h;
+};
+const timed = (p, ms) => new Promise((res, rej) => {
+  const t = setTimeout(() => rej(new Error('timeout ' + ms + 'ms')), ms);
+  p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+});
+
+/* ─────────── routing ─────────── */
+const directFetch = (target, init) =>
+  fetch(target, Object.assign({}, init, { mode: 'cors', redirect: 'follow', credentials: 'omit' }));
+
+const relayFetch = (p, target, init) => {
+  const u = build(p.url, target);
+  return p.post
+    ? fetch(u, { method: init.method, headers: init.headers, body: init.body, redirect: 'follow' })
+    : fetch(u, { redirect: 'follow' });
+};
+
+const logRows = [];
+function log(name, status, ms, ok, note) {
+  logRows.push({ name, status, ms, ok, note });
+  $('#log').innerHTML = logRows.map((r) =>
+    '<div><b>' + esc(r.name) + '</b><span class="' + (r.ok ? 'ok' : 'bad') + '">' +
+    esc(String(r.status)) + '</span><span>' + r.ms + 'ms</span><span>' + esc(r.note || '') + '</span></div>'
+  ).join('');
+}
+
+let last = null;
+async function send() {
+  const target = norm($('#url').value.trim());
+  if (!target) return;
+  const method = $('#method').value;
+  const mode = $('#mode').value;
+  const headers = parseHeaders($('#headers').value);
+  const rawBody = $('#body').value;
+  const hasBody = rawBody && method !== 'GET' && method !== 'HEAD';
+  if (hasBody && !Object.keys(headers).some((k) => k.toLowerCase() === 'content-type'))
+    headers['Content-Type'] = 'application/json';
+
+  const init = { method, headers, body: hasBody ? rawBody : undefined };
+  logRows.length = 0;
+  $('#log').innerHTML = '';
+  $('#respcard').hidden = false;
+  $('#out').innerHTML = '<pre>…</pre>';
+  $('#status').className = 'st';
+  $('#status').textContent = '…';
+  $('#meta').textContent = '';
+
+  const routes = [];
+  if (mode !== 'proxies') routes.push({ name: 'direct', direct: true });
+  if (mode !== 'direct') for (const p of alive()) routes.push({ name: p.name, p });
+
+  let lastErr = null;
+  for (const route of routes) {
+    const t = performance.now();
+    try {
+      const res = await timed(
+        route.direct ? directFetch(target, init) : relayFetch(route.p, target, init), 15000);
+      const ms = Math.round(performance.now() - t);
+      if (!route.direct && !res.ok) { log(route.name, res.status, ms, false, 'relay error'); markDown(route.name); continue; }
+      log(route.name, res.status, ms, true, 'via ' + (route.direct ? 'origin' : 'relay'));
+      markUp(route.name);
+      last = { target, method, headers, rawBody, via: route.name };
+      await render(res, target, route.name, ms);
+      return;
+    } catch (err) {
+      log(route.name, 'ERR', Math.round(performance.now() - t), false, String(err.message || err));
+      if (!route.direct) markDown(route.name);
+      lastErr = err;
+    }
+  }
+  $('#status').className = 'st bad';
+  $('#status').textContent = 'FAILED';
+  $('#meta').textContent = String(lastErr && lastErr.message || 'no route reached the target');
+  $('#out').innerHTML = '<pre>no route could reach ' + esc(target) + '\n\n' +
+    'check the URL, or add your own relay at the top of the script.</pre>';
+}
+
+async function render(res, target, via, ms) {
+  const ct = res.headers.get('content-type') || '';
+  const buf = await res.arrayBuffer();
+  const size = buf.byteLength;
+  const text = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|image\/svg)/i.test(ct) ||
+               (!ct && size < 500000);
+  const bodyText = text ? new TextDecoder().decode(buf) : null;
+
+  $('#status').className = 'st ' + (res.ok ? 'ok' : 'bad');
+  $('#status').textContent = res.status + ' ' + (res.statusText || '');
+  $('#meta').textContent = via + ' · ' + ms + 'ms · ' + size.toLocaleString() + ' B · ' + (ct || 'no content-type');
+
+  let pretty = bodyText, isJSON = /json/i.test(ct) || /^\s*[[{]/.test(bodyText || '');
+  if (isJSON && bodyText) {
+    try { pretty = JSON.stringify(JSON.parse(bodyText), null, 2); } catch { isJSON = false; pretty = bodyText; }
+  }
+  const head = [...res.headers].map(([k, v]) => k + ': ' + v).join('\n');
+
+  const view = (tab) => {
+    const out = $('#out');
+    out.innerHTML = '';
+    if (tab === 'headers') out.innerHTML = '<pre>' + esc(head) + '</pre>';
+    else if (tab === 'raw') out.innerHTML = '<pre>' + esc(bodyText ?? '(binary — use “open raw”)') + '</pre>';
+    else if (bodyText === null) out.innerHTML = '<pre>binary payload (' + esc(ct || 'unknown type') + ')</pre>';
+    else out.innerHTML = '<pre>' + (isJSON ? highlight(pretty) : esc(bodyText)) + '</pre>';
+
+    if (/^image\//.test(ct)) {
+      const img = new Image(); img.className = 'pv'; img.src = bestEndpoint(target); out.appendChild(img);
+    } else if (/^video\//.test(ct)) {
+      const v = document.createElement('video'); v.className = 'pv'; v.controls = true; v.src = bestEndpoint(target); out.appendChild(v);
+    }
+    document.querySelectorAll('.tabs button').forEach((b) =>
+      b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  };
+  document.querySelectorAll('.tabs button').forEach((b) => { b.onclick = () => view(b.dataset.tab); });
+  view('pretty');
+
+  const base = location.origin + location.pathname;
+  $('#lraw').value = base + '?u=' + enc(target) + (RAW_BASE ? '' : '&relay=' + enc(alive()[0].name));
+  $('#lembed').value = base + '?u=' + enc(target) + '&embed=auto';
+  $('#ltext').value = base + '?u=' + enc(target) + '&raw=1';
+
+  $('#cpbody').onclick = () => copy(bodyText ?? '');
+  $('#cpfetch').onclick = () => copy(
+    '(async () => {\n  const r = await fetch(' + JSON.stringify(target) + ', {\n' +
+    '    method: ' + JSON.stringify(method()) + ',\n' +
+    '    headers: ' + JSON.stringify(headers()) + ',\n' +
+    '    body: ' + (last && last.rawBody ? JSON.stringify(last.rawBody) : 'undefined') + '\n' +
+    '  });\n  console.log(r.status, await r.text());\n})();');
+  $('#cpcurl').onclick = () => copy(
+    'curl -sSL' + (method() !== 'GET' ? ' -X ' + method() : '') +
+    Object.entries(headers()).map(([k, v]) => " -H '" + k + ': ' + v + "'").join('') +
+    (last && last.rawBody ? " -d '" + last.rawBody.replace(/'/g, "'\\''") + "'" : '') +
+    " '" + target + "'");
+  $('#open').onclick = () => window.open(bestEndpoint(target), '_blank');
+}
+const method = () => $('#method').value;
+const headers = () => parseHeaders($('#headers').value);
+
+function copy(s) {
+  navigator.clipboard.writeText(s).catch(() => {});
+  const b = $('#send'); const old = b.textContent;
+  b.textContent = 'copied'; setTimeout(() => { b.textContent = old; }, 700);
+}
+
+/* ─────────── service worker bootstrap ─────────── */
+async function initSW() {
+  const pill = $('#swpill');
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') {
+    pill.textContent = 'service worker: off'; pill.className = 'pill bad';
+    $('#endpoint').textContent = 'endpoint: relay links only';
+    return;
+  }
+  try {
+    const blob = new Blob([SW_SOURCE], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const scope = new URL('./', location.href).pathname;
+    let reg;
+    try { reg = await navigator.serviceWorker.register(url, { scope }); }
+    catch { reg = await navigator.serviceWorker.register(url); }
+    await navigator.serviceWorker.ready;
+    const s = reg.scope && !reg.scope.startsWith('blob:') ? reg.scope : new URL('./', location.href).href;
+    RAW_BASE = new URL('raw/?u=', s).href;
+    pill.textContent = 'service worker: live'; pill.className = 'pill ok';
+    $('#endpoint').textContent = 'endpoint: ' + new URL('raw/?u=', s).pathname;
+    if (qs.has('nosw')) { await reg.unregister(); pill.textContent = 'service worker: unregistered'; pill.className = 'pill'; }
+  } catch (e) {
+    pill.textContent = 'service worker: unavailable'; pill.className = 'pill bad';
+    $('#endpoint').textContent = 'endpoint: relay links only';
+  }
+}
+
+/* ─────────── url-API modes ─────────── */
+function chromeOff() { document.body.classList.add('embed'); }
+
+function showEmbed(target, kind) {
+  chromeOff();
+  const v = $('#viewer'); v.hidden = false;
+  const src = bestEndpoint(target);
+  if (kind === 'auto') {
+    const ext = target.split('?')[0].split('.').pop().toLowerCase();
+    kind = /^(png|jpe?g|gif|webp|avif|svg|ico)$/.test(ext) ? 'img'
+         : /^(mp4|webm|mov)$/.test(ext) ? 'video' : 'iframe';
+  }
+  const el = document.createElement(kind === 'img' ? 'img' : kind);
+  el.src = src;
+  if (kind === 'video') { el.controls = true; el.autoplay = true; el.loop = true; el.muted = true; }
+  v.appendChild(el);
+}
+
+async function showRaw(target) {
+  chromeOff();
+  const v = $('#viewer'); v.hidden = false;
+  v.style.overflow = 'auto';
+  const pre = document.createElement('pre');
+  pre.style.cssText = 'position:relative;inset:auto;height:100%;border:0;border-radius:0;max-height:none';
+  pre.textContent = 'fetching…';
+  v.appendChild(pre);
+  for (const route of alive()) {
+    try {
+      const res = await timed(relayFetch(route, target, { method: 'GET', headers: {} }), 15000);
+      if (!res.ok) continue;
+      pre.textContent = await res.text();
+      return;
+    } catch {}
+  }
+  try { pre.textContent = await (await directFetch(target, { method: 'GET', headers: {} })).text(); }
+  catch { pre.textContent = 'all routes failed for ' + target; }
+}
+
+/* ─────────── wire up ─────────── */
+$('#send').onclick = send;
+$('#url').addEventListener('keydown', (e) => { if (e.key === 'Enter') send(); });
+document.querySelectorAll('[data-copy]').forEach((b) =>
+  b.onclick = () => { const f = $('#' + b.dataset.copy); if (f.value) copy(f.value); });
+document.querySelectorAll('[data-open]').forEach((b) =>
+  b.onclick = () => { const f = $('#' + b.dataset.open); if (f.value) window.open(f.value, '_blank'); });
+
+const TARGET = qs.get('u') || qs.get('url') || '';
+if (TARGET) {
+  $('#url').value = TARGET;
+  const embed = qs.get('embed');
+  if (embed) showEmbed(TARGET, embed === '1' || embed === '' ? 'auto' : embed);
+  else if (qs.has('raw')) showRaw(TARGET);
+  else send();
+}
+
+initSW();
+})();
+</script>
+</body>
+</html>
